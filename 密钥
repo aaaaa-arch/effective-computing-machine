@@ -1,26 +1,67 @@
--- 【常年不变的验证加载器】 别把这段代码发给任何人！
-local SECRET_KEY = "Zhi牛逼"  -- 你的密钥，自己改，别泄露
-local MAIN_CIPHER_URL = "https://raw.githubusercontent.com/aaaaa-arch/effective-computing-machine/main/main_cipher.lua"  -- 你加密后的主脚本链接
-
--- 1. 拉取加密后的主脚本
-local success, cipher_text = pcall(function()
-    return game:HttpGet(MAIN_CIPHER_URL)
+-- 卡密验证加载器 (WindUI版)
+-- 加载 WindUI (请确保这个链接有效)
+local success, WindUI = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/Init.lua"))()
 end)
 
-if not success or cipher_text == "" then
-    warn("404：脚本不存在或拉取失败")
+if not success or not WindUI then
+    warn("WindUI 加载失败，请检查网络或WindUI链接")
     return
 end
 
--- 2. 用密钥解密（没密钥的话这里直接炸，效果≈404）
-local decrypt_success, plain_text = pcall(function()
-    return crypt.aes_decrypt(cipher_text, SECRET_KEY)
-end)
+-- 创建窗口
+local Window = WindUI:CreateWindow({
+    Title = "Verity 脚本验证",
+    Icon = "rbxassetid://7734053498", -- 锁的图标
+    Size = UDim2.fromOffset(300, 180),
+    Transparent = true,
+    Theme = "Dark",
+})
 
-if not decrypt_success or plain_text == "" then
-    warn("404：密钥错误或脚本已失效")
-    return
-end
+-- 创建 Tab
+local Tab = Window:Tab({ Title = "验证", Icon = "rbxassetid://7733724749" })
 
--- 3. 执行解密后的主脚本
-loadstring(plain_text)()
+-- 创建输入框和按钮
+Tab:Paragraph({ Title = "请输入卡密", Content = "请联系作者获取激活码" })
+
+local KeyInput = Tab:TextBox({
+    Title = "卡密",
+    Value = "",
+    PlaceholderText = "在此输入...",
+    Callback = function() end -- 输入时不处理，等点击按钮
+})
+
+Tab:Button({
+    Title = "确认",
+    Callback = function()
+        local user_key = KeyInput.Text -- 获取用户输入的内容
+        local correct_key = "Zhi牛逼"  -- <-- 你的正确卡密在这里！
+        
+        if user_key == correct_key then
+            Window:Remove() -- 验证成功，关闭窗口
+            WindUI:Notify({ Title = "验证成功", Content = "正在加载主脚本...", Duration = 2 })
+            
+            -- 验证成功后，加载主脚本
+            local main_url = "https://raw.githubusercontent.com/aaaaa-arch/effective-computing-machine/main/main_cipher.lua"
+            local ok, cipher = pcall(game.HttpGet, game, main_url)
+            if ok and cipher then
+                -- 如果你的主脚本是加密的，这里需要解密；如果是明文，直接 loadstring
+                -- local plain = crypt.aes_decrypt(cipher, correct_key)
+                -- loadstring(plain)()
+                loadstring(cipher)() -- 假设主脚本是明文，或者你自行加上解密逻辑
+            else
+                WindUI:Notify({ Title = "错误", Content = "主脚本加载失败", Icon = "rbxassetid://7733914745" })
+            end
+        else
+            WindUI:Notify({ 
+                Title = "验证失败", 
+                Content = "卡密不正确！", 
+                Icon = "rbxassetid://7733914745", -- 错误图标
+                Duration = 3 
+            })
+            KeyInput:SetText("") -- 清空输入框
+        end
+    end
+})
+
+Window:SelectTab(1)
