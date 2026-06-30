@@ -1,0 +1,1423 @@
+--[[
+    ============================================
+    Ultimate Script Hub v4.0 (WindUI版)
+    ============================================
+    
+    改动：
+    - UI 换成 WindUI（参考 XY脚本 风格）
+    - 飞行功能换成 XY脚本 的外部 flyUIscript
+    - 其他所有功能保持 v3.0 原样
+    
+    作者: Chu Qinr
+    ============================================
+]]
+
+-- ══════════════════════════════════════════════
+-- 加载 WindUI
+-- ══════════════════════════════════════════════
+
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+
+-- ══════════════════════════════════════════════
+-- 核心系统
+-- ══════════════════════════════════════════════
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local StarterGui = game:GetService("StarterGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Camera = Workspace.CurrentCamera
+
+-- 状态管理
+local States = {
+    Speeding = false,
+    Noclip = false,
+    Invisible = false,
+    GodMode = false,
+    ESP = false,
+    Aimbot = false,
+    AutoFarm = false,
+    AutoCollect = false,
+    Fullbright = false,
+    NoFog = false,
+    InfiniteJump = false,
+    NightVision = false,
+    KillAura = false,
+    AutoParry = false,
+    Radar = false,
+    ForceField = false,
+    SuperJump = false,
+}
+
+-- 配置存储
+local Config = {
+    Speed = 50,
+    JumpPower = 100,
+    ESP_Color = Color3.fromRGB(255, 0, 0),
+    Aimbot_FOV = 120,
+    Aimbot_Smoothness = 5,
+    KillAura_Range = 15,
+}
+
+-- 保存原始Lighting值
+local OriginalAmbient = Lighting.Ambient
+local OriginalBrightness = Lighting.Brightness
+local OriginalFogEnd = Lighting.FogEnd
+local OriginalFogStart = Lighting.FogStart
+
+-- ══════════════════════════════════════════════
+-- 工具函数
+-- ══════════════════════════════════════════════
+
+local function GetRootPart()
+    return LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+end
+
+local function GetHumanoid()
+    return LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+end
+
+local function Notify(title, text, duration)
+    duration = duration or 4
+    pcall(function()
+        WindUI:Notify({
+            Title = title,
+            Content = text,
+            Duration = duration,
+            Icon = "info",
+        })
+    end)
+end
+
+local function GetClosestPlayer()
+    local closest = nil
+    local minDist = math.huge
+    local rootPart = GetRootPart()
+    if not rootPart then return nil end
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local targetRoot = player.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                local dist = (targetRoot.Position - rootPart.Position).Magnitude
+                if dist < minDist then
+                    minDist = dist
+                    closest = player
+                end
+            end
+        end
+    end
+    return closest
+end
+
+local function GetAllPlayersInRange(range)
+    local result = {}
+    local rootPart = GetRootPart()
+    if not rootPart then return result end
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local targetRoot = player.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                local dist = (targetRoot.Position - rootPart.Position).Magnitude
+                if dist <= range then
+                    table.insert(result, player)
+                end
+            end
+        end
+    end
+    return result
+end
+
+-- ══════════════════════════════════════════════
+-- 功能模块
+-- ══════════════════════════════════════════════
+
+-- [[ 飞行系统 (XY脚本外部飞行) ]]
+local function LaunchFly()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/rodan-demirali/RobloxUI/refs/heads/main/flyUIscript"))()
+    Notify("飞行", "已加载XY飞行脚本", 3)
+end
+
+-- [[ 穿墙系统 ]]
+local function ToggleNoclip(state)
+    States.Noclip = state
+    
+    if state then
+        spawn(function()
+            while States.Noclip and LocalPlayer.Character do
+                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+                RunService.Stepped:Wait()
+            end
+        end)
+        Notify("穿墙", "穿墙已开启", 3)
+    else
+        Notify("穿墙", "穿墙已关闭", 3)
+    end
+end
+
+-- [[ ESP透视系统 ]]
+local ESP_Objects = {}
+
+local function ToggleESP(state)
+    States.ESP = state
+    
+    if state then
+        spawn(function()
+            while States.ESP do
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and player.Character then
+                        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                        
+                        if hrp and not ESP_Objects[player] then
+                            local highlight = Instance.new("Highlight")
+                            highlight.Name = "ScriptHub_ESP"
+                            highlight.FillColor = Config.ESP_Color
+                            highlight.FillTransparency = 0.7
+                            highlight.OutlineColor = Config.ESP_Color
+                            highlight.OutlineTransparency = 0
+                            highlight.Adornee = player.Character
+                            highlight.Parent = LocalPlayer.PlayerGui
+                            
+                            local billboard = Instance.new("BillboardGui")
+                            billboard.Name = "ScriptHub_ESP_Name"
+                            billboard.Size = UDim2.new(0, 200, 0, 50)
+                            billboard.StudsOffset = Vector3.new(0, 3, 0)
+                            billboard.AlwaysOnTop = true
+                            billboard.Adornee = hrp
+                            billboard.Parent = LocalPlayer.PlayerGui
+                            
+                            local nameText = Instance.new("TextLabel")
+                            nameText.Size = UDim2.new(1, 0, 0.5, 0)
+                            nameText.BackgroundTransparency = 1
+                            nameText.TextColor3 = Color3.new(1, 1, 1)
+                            nameText.TextStrokeTransparency = 0
+                            nameText.Font = Enum.Font.GothamBold
+                            nameText.TextScaled = true
+                            nameText.Text = player.Name
+                            nameText.Parent = billboard
+                            
+                            local distText = Instance.new("TextLabel")
+                            distText.Name = "Distance"
+                            distText.Size = UDim2.new(1, 0, 0.5, 0)
+                            distText.Position = UDim2.new(0, 0, 0.5, 0)
+                            distText.BackgroundTransparency = 1
+                            distText.TextColor3 = Color3.new(1, 1, 0)
+                            distText.TextStrokeTransparency = 0
+                            distText.Font = Enum.Font.Gotham
+                            distText.TextScaled = true
+                            distText.Text = "0m"
+                            distText.Parent = billboard
+                            
+                            ESP_Objects[player] = {highlight, billboard}
+                        end
+                        
+                        if ESP_Objects[player] then
+                            local myRoot = GetRootPart()
+                            if myRoot and hrp then
+                                local dist = math.floor((hrp.Position - myRoot.Position).Magnitude)
+                                local billboard = ESP_Objects[player][2]
+                                local distLabel = billboard:FindFirstChild("Distance")
+                                if distLabel then
+                                    distLabel.Text = dist .. "m"
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                for player, objects in pairs(ESP_Objects) do
+                    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+                        for _, obj in pairs(objects) do
+                            if obj and obj.Parent then obj:Destroy() end
+                        end
+                        ESP_Objects[player] = nil
+                    end
+                end
+                
+                RunService.RenderStepped:Wait()
+            end
+        end)
+        
+        Notify("ESP", "ESP透视已开启", 3)
+    else
+        for _, objects in pairs(ESP_Objects) do
+            for _, obj in pairs(objects) do
+                if obj and obj.Parent then obj:Destroy() end
+            end
+        end
+        ESP_Objects = {}
+        Notify("ESP", "ESP透视已关闭", 3)
+    end
+end
+
+-- [[ 自瞄系统 ]]
+local function ToggleAimbot(state)
+    States.Aimbot = state
+    
+    if state then
+        spawn(function()
+            while States.Aimbot do
+                local closestPlayer = nil
+                local closestAngle = Config.Aimbot_FOV
+                local myRoot = GetRootPart()
+                
+                if myRoot then
+                    local cameraCF = Camera.CFrame
+                    local lookVector = cameraCF.LookVector
+                    
+                    for _, player in pairs(Players:GetPlayers()) do
+                        if player ~= LocalPlayer and player.Character then
+                            local targetRoot = player.Character:FindFirstChild("HumanoidRootPart")
+                            local targetHum = player.Character:FindFirstChild("Humanoid")
+                            
+                            if targetRoot and targetHum and targetHum.Health > 0 then
+                                local toTarget = (targetRoot.Position - myRoot.Position).Unit
+                                local angle = math.deg(math.acos(lookVector:Dot(toTarget)))
+                                
+                                if angle < closestAngle then
+                                    closestAngle = angle
+                                    closestPlayer = player
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                if closestPlayer and closestPlayer.Character then
+                    local targetHead = closestPlayer.Character:FindFirstChild("Head")
+                    if targetHead then
+                        local targetPos = targetHead.Position
+                        local currentPos = Camera.CFrame.Position
+                        local newCF = CFrame.lookAt(currentPos, targetPos)
+                        
+                        local alpha = 1 / Config.Aimbot_Smoothness
+                        Camera.CFrame = Camera.CFrame:Lerp(newCF, alpha)
+                    end
+                end
+                
+                RunService.RenderStepped:Wait()
+            end
+        end)
+        
+        Notify("自瞄", "自瞄已开启 (FOV: " .. Config.Aimbot_FOV .. ")", 3)
+    else
+        Notify("自瞄", "自瞄已关闭", 3)
+    end
+end
+
+-- [[ 无敌模式 ]]
+local function ToggleGodMode(state)
+    States.GodMode = state
+    local hum = GetHumanoid()
+    if not hum then return end
+    
+    if state then
+        spawn(function()
+            while States.GodMode and hum and hum.Parent do
+                hum.Health = hum.MaxHealth
+                RunService.Heartbeat:Wait()
+            end
+        end)
+        Notify("无敌", "无敌模式已开启", 3)
+    else
+        Notify("无敌", "无敌模式已关闭", 3)
+    end
+end
+
+-- [[ 全图亮 ]]
+local function ToggleFullbright(state)
+    States.Fullbright = state
+    
+    if state then
+        Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.Brightness = 3
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = false
+        Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+        Notify("全图亮", "全图亮已开启", 3)
+    else
+        Lighting.Ambient = OriginalAmbient
+        Lighting.Brightness = OriginalBrightness
+        Lighting.FogEnd = OriginalFogEnd
+        Lighting.FogStart = OriginalFogStart
+        Lighting.GlobalShadows = true
+        Lighting.OutdoorAmbient = Color3.new(0.3, 0.3, 0.3)
+        Notify("全图亮", "全图亮已关闭", 3)
+    end
+end
+
+-- [[ 无限跳跃 ]]
+local function ToggleInfiniteJump(state)
+    States.InfiniteJump = state
+    
+    if state then
+        Notify("无限跳跃", "无限跳跃已开启", 3)
+    else
+        Notify("无限跳跃", "无限跳跃已关闭", 3)
+    end
+end
+
+-- [[ 加速系统 ]]
+local function ToggleSpeed(state)
+    States.Speeding = state
+    local hum = GetHumanoid()
+    if not hum then return end
+    
+    if state then
+        hum.WalkSpeed = Config.Speed
+        Notify("加速", "速度: " .. Config.Speed, 3)
+    else
+        hum.WalkSpeed = 16
+        Notify("加速", "速度恢复正常", 3)
+    end
+end
+
+-- [[ 跳跃增强 ]]
+local function ToggleSuperJump(state)
+    States.SuperJump = state
+    local hum = GetHumanoid()
+    if not hum then return end
+    
+    if state then
+        hum.JumpPower = Config.JumpPower
+        hum.UseJumpPower = true
+        Notify("跳跃增强", "跳跃力: " .. Config.JumpPower, 3)
+    else
+        hum.JumpPower = 50
+        Notify("跳跃增强", "跳跃力恢复正常", 3)
+    end
+end
+
+-- [[ 隐身系统 ]]
+local function ToggleInvisible(state)
+    States.Invisible = state
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    if state then
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") or part:IsA("MeshPart") then
+                part.Transparency = 1
+            elseif part:IsA("Decal") then
+                part.Transparency = 1
+            end
+        end
+        Notify("隐身", "隐身已开启", 3)
+    else
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") or part:IsA("MeshPart") then
+                if part.Name ~= "HumanoidRootPart" then
+                    part.Transparency = 0
+                end
+            elseif part:IsA("Decal") then
+                part.Transparency = 0
+            end
+        end
+        Notify("隐身", "隐身已关闭", 3)
+    end
+end
+
+-- [[ 传送系统 ]]
+local function TeleportToPlayer(playerName)
+    local target = nil
+    for _, p in pairs(Players:GetPlayers()) do
+        if string.lower(p.Name):find(string.lower(playerName)) then
+            target = p
+            break
+        end
+    end
+    
+    if target and target.Character then
+        local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+        local myRoot = GetRootPart()
+        if targetRoot and myRoot then
+            myRoot.CFrame = targetRoot.CFrame + Vector3.new(3, 0, 0)
+            Notify("传送", "已传送到 " .. target.Name, 3)
+        end
+    else
+        Notify("传送", "未找到玩家: " .. tostring(playerName), 3)
+    end
+end
+
+-- [[ 力场护盾 ]]
+local function ToggleForceField(state)
+    States.ForceField = state
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    if state then
+        local ff = Instance.new("ForceField")
+        ff.Name = "ScriptHub_FF"
+        ff.Visible = true
+        ff.Parent = char
+        Notify("护盾", "力场护盾已开启", 3)
+    else
+        local ff = char:FindFirstChild("ScriptHub_FF")
+        if ff then ff:Destroy() end
+        Notify("护盾", "力场护盾已关闭", 3)
+    end
+end
+
+-- [[ 夜视 ]]
+local function ToggleNightVision(state)
+    States.NightVision = state
+    
+    if state then
+        Lighting.Ambient = Color3.new(0.5, 0.5, 0.5)
+        Lighting.Brightness = 2
+        Notify("夜视", "夜视已开启", 3)
+    else
+        Lighting.Ambient = OriginalAmbient
+        Lighting.Brightness = OriginalBrightness
+        Notify("夜视", "夜视已关闭", 3)
+    end
+end
+
+-- [[ 去除雾效 ]]
+local function ToggleNoFog(state)
+    States.NoFog = state
+    
+    if state then
+        Lighting.FogEnd = 100000
+        Lighting.FogStart = 100000
+        Notify("雾效", "雾效已去除", 3)
+    else
+        Lighting.FogEnd = OriginalFogEnd
+        Lighting.FogStart = OriginalFogStart
+        Notify("雾效", "雾效已恢复", 3)
+    end
+end
+
+-- [[ 击杀光环 ]]
+local function ToggleKillAura(state)
+    States.KillAura = state
+    
+    if state then
+        spawn(function()
+            while States.KillAura do
+                local targets = GetAllPlayersInRange(Config.KillAura_Range)
+                for _, target in pairs(targets) do
+                    if target.Character then
+                        local hum = target.Character:FindFirstChild("Humanoid")
+                        if hum then
+                            hum:TakeDamage(10)
+                        end
+                    end
+                end
+                wait(0.5)
+            end
+        end)
+        Notify("击杀光环", "已开启 (范围: " .. Config.KillAura_Range .. ")", 3)
+    else
+        Notify("击杀光环", "已关闭", 3)
+    end
+end
+
+-- [[ 自动反击 ]]
+local function ToggleAutoParry(state)
+    States.AutoParry = state
+    
+    if state then
+        spawn(function()
+            while States.AutoParry do
+                local myRoot = GetRootPart()
+                if myRoot then
+                    for _, player in pairs(Players:GetPlayers()) do
+                        if player ~= LocalPlayer and player.Character then
+                            local targetRoot = player.Character:FindFirstChild("HumanoidRootPart")
+                            if targetRoot then
+                                local dist = (targetRoot.Position - myRoot.Position).Magnitude
+                                if dist < 8 then
+                                    local tool = player.Character:FindFirstChildWhichIsA("Tool")
+                                    if tool then
+                                        myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 5)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                RunService.Heartbeat:Wait()
+            end
+        end)
+        Notify("自动反击", "已开启", 3)
+    else
+        Notify("自动反击", "已关闭", 3)
+    end
+end
+
+-- [[ 雷达系统 ]]
+local function ToggleRadar(state)
+    States.Radar = state
+    
+    if state then
+        spawn(function()
+            while States.Radar do
+                local myRoot = GetRootPart()
+                if myRoot then
+                    for _, player in pairs(Players:GetPlayers()) do
+                        if player ~= LocalPlayer and player.Character then
+                            local targetRoot = player.Character:FindFirstChild("HumanoidRootPart")
+                            if targetRoot then
+                                local dist = (targetRoot.Position - myRoot.Position).Magnitude
+                                if dist < 200 then
+                                    local marker = Instance.new("Part")
+                                    marker.Name = "ScriptHub_Radar_" .. player.Name
+                                    marker.Size = Vector3.new(2, 2, 2)
+                                    marker.Position = targetRoot.Position + Vector3.new(0, 5, 0)
+                                    marker.Anchored = true
+                                    marker.CanCollide = false
+                                    marker.Transparency = 0.5
+                                    marker.BrickColor = BrickColor.new("Really red")
+                                    marker.Material = Enum.Material.Neon
+                                    marker.Parent = Workspace
+                                    game:GetService("Debris"):AddItem(marker, 1)
+                                end
+                            end
+                        end
+                    end
+                end
+                wait(2)
+            end
+        end)
+        Notify("雷达", "雷达已开启", 3)
+    else
+        Notify("雷达", "雷达已关闭", 3)
+    end
+end
+
+-- [[ 自动收集 ]]
+local function ToggleAutoCollect(state)
+    States.AutoCollect = state
+    
+    if state then
+        spawn(function()
+            while States.AutoCollect do
+                local myRoot = GetRootPart()
+                if myRoot then
+                    for _, obj in pairs(Workspace:GetDescendants()) do
+                        if obj:IsA("Model") or obj:IsA("Part") then
+                            local name = string.lower(obj.Name)
+                            if name:find("coin") or name:find("cash") or name:find("money") 
+                               or name:find("gem") or name:find("orb") or name:find("collect")
+                               or name:find("drop") or name:find("item") or name:find("loot") then
+                                
+                                local objRoot = obj:IsA("Model") and obj:FindFirstChildWhichIsA("BasePart") or obj
+                                if objRoot and objRoot:IsA("BasePart") then
+                                    local dist = (objRoot.Position - myRoot.Position).Magnitude
+                                    if dist < 100 then
+                                        objRoot.CFrame = myRoot.CFrame
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                wait(0.5)
+            end
+        end)
+        Notify("自动收集", "自动收集已开启", 3)
+    else
+        Notify("自动收集", "自动收集已关闭", 3)
+    end
+end
+
+-- [[ 快速重生 ]]
+local function InstantRespawn()
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then
+            hum.Health = 0
+        end
+    end
+    Notify("重生", "已执行重生", 2)
+end
+
+-- ══════════════════════════════════════════════
+-- WindUI 界面 (XY脚本风格)
+-- ══════════════════════════════════════════════
+
+-- 欢迎弹窗
+WindUI:Popup({
+    Title = "欢迎",
+    Icon = "info",
+    Content = "欢迎使用 Script Hub v4.0 by Chu Qinr 😋",
+    Buttons = {
+        {
+            Title = "取消",
+            Callback = function() end,
+            Variant = "Tertiary",
+        },
+        {
+            Title = "进入",
+            Icon = "arrow-right",
+            Callback = function() end,
+            Variant = "Primary",
+        }
+    }
+})
+
+-- 欢迎通知
+WindUI:Notify({
+    Title = "Script Hub v4.0",
+    Content = "已加载成功！",
+    Duration = 5,
+    Icon = "bird",
+})
+
+-- 创建主窗口
+local Window = WindUI:CreateWindow({
+    Title = "<font color='#ff007f'>ScriptHub</font>-<font color='#00ffff'>v4</font>",
+    Author = "<font color='#00ffff'>by</font> <font color='#ff007f'>Chu Qinr</font>",
+    Folder = "ScriptHub",
+    Size = UDim2.fromOffset(300, 400),
+    Transparent = true,
+    Theme = "Dark",
+    SideBarWidth = 200,
+    Icon = 27,
+    IconThemed = true,
+    ScrollBarEnabled = true,
+    HideSearchBar = true,
+    User = {
+        Enabled = true,
+        Anonymous = false,
+        Callback = function() end
+    }
+})
+
+-- 渐变打开按钮
+Window:EditOpenButton({
+    Title = "<font color='#ff007f'>Script</font><font color='#00ffff'>Hub</font> 免费版",
+    Icon = 27,
+    CornerRadius = UDim.new(0, 8),
+    StrokeThickness = 2,
+    Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromHex("#ff007f")),
+        ColorSequenceKeypoint.new(0.5, Color3.fromHex("#00ffff")),
+        ColorSequenceKeypoint.new(1, Color3.fromHex("#ff007f"))
+    })
+})
+
+-- 标签
+Window:Tag({
+    Title = "Script Hub",
+    Color = Color3.fromHex("#00ffff")
+})
+Window:Tag({
+    Title = "v4.0",
+    Color = Color3.fromHex("#ff007f")
+})
+
+-- 实时时钟标签
+local TimeTag = Window:Tag({
+    Title = "当前时间: 00:00:00",
+    Color = Color3.fromHex("#00ffff")
+})
+
+local hue = 0
+task.spawn(function()
+    while true do
+        local now = os.date("*t")
+        local hours = string.format("%02d", now.hour)
+        local minutes = string.format("%02d", now.min)
+        local seconds = string.format("%02d", now.sec)
+        local timeString = string.format("当前时间: %s:%s:%s", hours, minutes, seconds)
+        hue = (hue + 0.01) % 1
+        local color = Color3.fromHSV(hue, 1, 1)
+        TimeTag:SetTitle(timeString)
+        TimeTag:SetColor(color)
+        task.wait(0.06)
+    end
+end)
+
+-- ═══ 霓虹边框效果 ═══
+local function ApplyNeonBorder(win, Speed)
+    Speed = Speed or 60
+    local MainFrame = win.UIElements and win.UIElements.Main
+    if not MainFrame then
+        local Attempts = 0
+        while not MainFrame and Attempts < 50 do
+            task.wait(0.1)
+            MainFrame = win.UIElements and win.UIElements.Main
+            Attempts = Attempts + 1
+        end
+        if not MainFrame then return end
+    end
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 12)
+    Corner.Parent = MainFrame
+    
+    local Border = Instance.new("UIStroke")
+    Border.Name = "NeonBorder"
+    Border.Thickness = 2
+    Border.Color = Color3.new(1, 1, 1)
+    Border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    Border.LineJoinMode = Enum.LineJoinMode.Round
+    Border.Parent = MainFrame
+    
+    local Gradient = Instance.new("UIGradient")
+    Gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromHex("#00FFFF")),
+        ColorSequenceKeypoint.new(0.5, Color3.fromHex("#FF00FF")),
+        ColorSequenceKeypoint.new(1, Color3.fromHex("#00FFFF"))
+    })
+    Gradient.Rotation = 0
+    Gradient.Parent = Border
+    
+    local Connection
+    Connection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not Border or Border.Parent == nil then
+            if Connection then Connection:Disconnect() end
+            return
+        end
+        local Time = tick()
+        Gradient.Rotation = (Time * Speed) % 360
+    end)
+end
+
+ApplyNeonBorder(Window, 60)
+
+-- ══════════════════════════════════════════════
+-- 公告栏 & 欢迎弹窗
+-- ══════════════════════════════════════════════
+
+-- 欢迎弹窗
+WindUI:CreatePopup({
+    Title = "<font color='#ff007f'>ScriptHub v4.0</font>",
+    SubTitle = "欢迎使用！",
+    Content = "感谢使用 <font color='#00ffff'>ScriptHub v4.0</font>！\n\n"
+        .. "本脚本由 <font color='#ff007f'>不知名开发者</font> 精心打造\n"
+        .. "抖音: <font color='#00ffff'>Zin</font>\n\n"
+        .. "<font color='#ffff00'>📢 公告：后续会更新出来更多功能，敬请期待！</font>\n\n"
+        .. "不知名开发者永远是最强的 💪",
+    Actions = {
+        {
+            Name = "知道了！",
+            Callback = function()
+                return true
+            end
+        }
+    }
+})
+
+-- 公告栏标签
+Window:Tag({
+    Title = "抖音: Zin",
+    Color = Color3.fromHex("#ff007f")
+})
+
+-- 公告栏 Section（放在玩家页顶部）
+-- 后续在玩家页中添加
+
+-- ══════════════════════════════════════════════
+-- 标签页 & 功能
+-- ══════════════════════════════════════════════
+
+-- ═══ 玩家页 ═══
+local PlayerTab = Window:Tab({
+    Title = "玩家",
+    Icon = "user",
+})
+
+-- 公告栏 Section
+local AnnouncementSection = PlayerTab:Section({
+    Title = "📢 公告栏",
+    Opened = true
+})
+
+AnnouncementSection:Paragraph({
+    Content = "<img src='rbxassetid://127418118514722' width='280' height='80'/>\n"
+        .. "<font color='#ff007f'>━━━━━━━━━━━━━━━━━━━━━━━━</font>\n"
+        .. "<font size='4' color='#00ffff'><b>ScriptHub v4.0</b></font>\n"
+        .. "<font color='#ff007f'>━━━━━━━━━━━━━━━━━━━━━━━━</font>\n\n"
+        .. "<font color='#ffff00'>开发者: <b>不知名开发者</b></font>\n"
+        .. "<font color='#00ffff'>抖音: <b>Zin</b></font>\n\n"
+        .. "<font color='#ff007f'>📢 公告：</font>\n"
+        .. "<font color='#ffffff'>后续会更新出来更多功能，敬请期待！</font>\n"
+        .. "<font color='#888888'>不知名开发者永远是最强的 💪</font>\n"
+        .. "<font color='#ff007f'>━━━━━━━━━━━━━━━━━━━━━━━━</font>",
+})
+
+PlayerTab:Space()
+
+local PlayerSection = PlayerTab:Section({
+    Title = "玩家功能",
+    Opened = true
+})
+
+-- 飞行（XY脚本外部飞行，按钮触发）
+PlayerTab:Button({
+    Title = "🚀 飞行 (XY脚本)",
+    Icon = "plane",
+    Callback = function()
+        LaunchFly()
+    end
+})
+
+PlayerTab:Space()
+
+PlayerTab:Toggle({
+    Title = "加速",
+    Icon = "zap",
+    Value = false,
+    Callback = function(state)
+        ToggleSpeed(state)
+    end
+})
+
+PlayerTab:Toggle({
+    Title = "超级跳跃",
+    Icon = "arrow-up",
+    Value = false,
+    Callback = function(state)
+        ToggleSuperJump(state)
+    end
+})
+
+PlayerTab:Toggle({
+    Title = "无限跳跃",
+    Icon = "chevrons-up",
+    Value = false,
+    Callback = function(state)
+        ToggleInfiniteJump(state)
+    end
+})
+
+PlayerTab:Toggle({
+    Title = "穿墙 (Noclip)",
+    Icon = "ghost",
+    Value = false,
+    Callback = function(state)
+        ToggleNoclip(state)
+    end
+})
+
+PlayerTab:Toggle({
+    Title = "隐身",
+    Icon = "eye-off",
+    Value = false,
+    Callback = function(state)
+        ToggleInvisible(state)
+    end
+})
+
+PlayerTab:Toggle({
+    Title = "力场护盾",
+    Icon = "shield",
+    Value = false,
+    Callback = function(state)
+        ToggleForceField(state)
+    end
+})
+
+PlayerTab:Space()
+
+PlayerTab:Button({
+    Title = "传送到最近玩家",
+    Icon = "locate",
+    Callback = function()
+        local closest = GetClosestPlayer()
+        if closest then
+            TeleportToPlayer(closest.Name)
+        else
+            Notify("传送", "附近没有其他玩家", 3)
+        end
+    end
+})
+
+PlayerTab:Space()
+
+-- 速度滑块
+PlayerTab:Slider({
+    Title = "走路速度",
+    Step = 1,
+    Value = {
+        Min = 16,
+        Max = 500,
+        Default = 50,
+    },
+    Callback = function(value)
+        Config.Speed = value
+        if States.Speeding then
+            local hum = GetHumanoid()
+            if hum then hum.WalkSpeed = value end
+        end
+    end
+})
+
+PlayerTab:Space()
+
+-- 跳跃力滑块
+PlayerTab:Slider({
+    Title = "跳跃力",
+    Step = 5,
+    Value = {
+        Min = 50,
+        Max = 500,
+        Default = 100,
+    },
+    Callback = function(value)
+        Config.JumpPower = value
+        if States.SuperJump then
+            local hum = GetHumanoid()
+            if hum then hum.JumpPower = value end
+        end
+    end
+})
+
+-- ═══ 战斗页 ═══
+local CombatTab = Window:Tab({
+    Title = "战斗",
+    Icon = "swords",
+})
+
+local CombatSection = CombatTab:Section({
+    Title = "战斗功能",
+    Opened = true
+})
+
+CombatTab:Toggle({
+    Title = "自瞄 (Aimbot)",
+    Icon = "crosshair",
+    Value = false,
+    Callback = function(state)
+        ToggleAimbot(state)
+    end
+})
+
+CombatTab:Toggle({
+    Title = "ESP透视",
+    Icon = "scan-eye",
+    Value = false,
+    Callback = function(state)
+        ToggleESP(state)
+    end
+})
+
+CombatTab:Toggle({
+    Title = "击杀光环",
+    Icon = "flame",
+    Value = false,
+    Callback = function(state)
+        ToggleKillAura(state)
+    end
+})
+
+CombatTab:Toggle({
+    Title = "无敌模式",
+    Icon = "heart",
+    Value = false,
+    Callback = function(state)
+        ToggleGodMode(state)
+    end
+})
+
+CombatTab:Toggle({
+    Title = "自动反击",
+    Icon = "shield-check",
+    Value = false,
+    Callback = function(state)
+        ToggleAutoParry(state)
+    end
+})
+
+CombatTab:Space()
+
+-- 自瞄FOV滑块
+CombatTab:Slider({
+    Title = "自瞄FOV",
+    Step = 5,
+    Value = {
+        Min = 10,
+        Max = 360,
+        Default = 120,
+    },
+    Callback = function(value)
+        Config.Aimbot_FOV = value
+    end
+})
+
+-- 自瞄平滑度滑块
+CombatTab:Slider({
+    Title = "自瞄平滑度",
+    Step = 1,
+    Value = {
+        Min = 1,
+        Max = 20,
+        Default = 5,
+    },
+    Callback = function(value)
+        Config.Aimbot_Smoothness = value
+    end
+})
+
+-- 击杀光环范围滑块
+CombatTab:Slider({
+    Title = "击杀光环范围",
+    Step = 1,
+    Value = {
+        Min = 5,
+        Max = 50,
+        Default = 15,
+    },
+    Callback = function(value)
+        Config.KillAura_Range = value
+    end
+})
+
+-- ═══ 世界页 ═══
+local WorldTab = Window:Tab({
+    Title = "世界",
+    Icon = "globe",
+})
+
+local WorldSection = WorldTab:Section({
+    Title = "世界功能",
+    Opened = true
+})
+
+WorldTab:Toggle({
+    Title = "全图亮",
+    Icon = "sun",
+    Value = false,
+    Callback = function(state)
+        ToggleFullbright(state)
+    end
+})
+
+WorldTab:Toggle({
+    Title = "去除雾效",
+    Icon = "cloud-fog",
+    Value = false,
+    Callback = function(state)
+        ToggleNoFog(state)
+    end
+})
+
+WorldTab:Toggle({
+    Title = "夜视模式",
+    Icon = "moon",
+    Value = false,
+    Callback = function(state)
+        ToggleNightVision(state)
+    end
+})
+
+WorldTab:Space()
+
+WorldTab:Button({
+    Title = "设为白天",
+    Icon = "sun",
+    Callback = function()
+        Lighting.ClockTime = 14
+        Notify("时间", "已设为白天", 2)
+    end
+})
+
+WorldTab:Button({
+    Title = "设为夜晚",
+    Icon = "moon",
+    Callback = function()
+        Lighting.ClockTime = 0
+        Notify("时间", "已设为夜晚", 2)
+    end
+})
+
+WorldTab:Button({
+    Title = "设为黄昏",
+    Icon = "sunset",
+    Callback = function()
+        Lighting.ClockTime = 17.5
+        Notify("时间", "已设为黄昏", 2)
+    end
+})
+
+WorldTab:Button({
+    Title = "设为日出",
+    Icon = "sunrise",
+    Callback = function()
+        Lighting.ClockTime = 6
+        Notify("时间", "已设为日出", 2)
+    end
+})
+
+-- ═══ 工具页 ═══
+local ToolTab = Window:Tab({
+    Title = "工具",
+    Icon = "wrench",
+})
+
+local ToolSection = ToolTab:Section({
+    Title = "工具功能",
+    Opened = true
+})
+
+ToolTab:Toggle({
+    Title = "自动收集",
+    Icon = "package",
+    Value = false,
+    Callback = function(state)
+        ToggleAutoCollect(state)
+    end
+})
+
+ToolTab:Toggle({
+    Title = "雷达",
+    Icon = "radar",
+    Value = false,
+    Callback = function(state)
+        ToggleRadar(state)
+    end
+})
+
+ToolTab:Space()
+
+ToolTab:Button({
+    Title = "快速重生",
+    Icon = "rotate-ccw",
+    Callback = function()
+        InstantRespawn()
+    end
+})
+
+ToolTab:Button({
+    Title = "复制坐标",
+    Icon = "clipboard-copy",
+    Callback = function()
+        local myRoot = GetRootPart()
+        if myRoot then
+            local pos = myRoot.Position
+            if setclipboard then
+                setclipboard(string.format("%.1f, %.1f, %.1f", pos.X, pos.Y, pos.Z))
+            end
+            Notify("坐标", string.format("%.1f, %.1f, %.1f", pos.X, pos.Y, pos.Z), 3)
+        end
+    end
+})
+
+ToolTab:Button({
+    Title = "复制游戏ID",
+    Icon = "gamepad-2",
+    Callback = function()
+        if setclipboard then
+            setclipboard(tostring(game.PlaceId))
+        end
+        Notify("游戏ID", tostring(game.PlaceId), 3)
+    end
+})
+
+ToolTab:Button({
+    Title = "复制玩家ID",
+    Icon = "id-card",
+    Callback = function()
+        if setclipboard then
+            setclipboard(tostring(LocalPlayer.UserId))
+        end
+        Notify("玩家ID", tostring(LocalPlayer.UserId), 3)
+    end
+})
+
+ToolTab:Button({
+    Title = "在线玩家列表",
+    Icon = "users",
+    Callback = function()
+        local count = #Players:GetPlayers()
+        Notify("玩家列表", "共 " .. count .. " 名玩家在线", 5)
+    end
+})
+
+-- ═══ 脚本中心 ═══
+local ScriptCenterTab = Window:Tab({
+    Title = "脚本中心",
+    Icon = "code",
+})
+
+local TXSection = ScriptCenterTab:Section({
+    Title = "TX Script",
+    Opened = true
+})
+
+TXSection:Button({
+    Title = "全自动翻译",
+    Icon = "languages",
+    Description = "TX Script - 自动翻译游戏内聊天为中文",
+    Callback = function()
+        Notify("TX汉化", "正在加载全自动翻译...", 3)
+        local success, err = pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/JsYb666/Item/refs/heads/main/Auto-language"))()
+        end)
+        if success then
+            Notify("TX汉化", "全自动翻译已加载！", 3)
+        else
+            Notify("TX汉化", "加载失败: " .. tostring(err), 5)
+        end
+    end
+})
+
+local UtilitySection = ScriptCenterTab:Section({
+    Title = "实用脚本",
+    Opened = true
+})
+
+UtilitySection:Button({
+    Title = "小夜脚本2",
+    Icon = "terminal",
+    Description = "小夜脚本 - 综合功能脚本(玩家/飞行/碰飞等)",
+    Callback = function()
+        Notify("脚本中心", "正在加载小夜脚本2...", 3)
+        local success, err = pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/fningna51-stack/-/main/%E5%B0%8F%E5%A4%9C%E8%84%9A%E6%9C%AC2"))()
+        end)
+        if success then
+            Notify("脚本中心", "小夜脚本2已加载！", 3)
+        else
+            Notify("脚本中心", "加载失败: " .. tostring(err), 5)
+        end
+    end
+})
+
+-- ═══ 设置页 ═══
+local SettingsTab = Window:Tab({
+    Title = "设置",
+    Icon = "settings",
+})
+
+local SettingsSection = SettingsTab:Section({
+    Title = "关于",
+    Opened = true
+})
+
+SettingsTab:Button({
+    Title = "销毁GUI",
+    Icon = "x",
+    Callback = function()
+        Window:Destroy()
+    end
+})
+
+SettingsTab:Space()
+
+WindUI:Notify({
+    Title = "Script Hub v4.0",
+    Content = "所有功能已加载完毕！",
+    Duration = 3,
+    Icon = "check-circle",
+})
+
+-- ══════════════════════════════════════════════
+-- 无限跳跃处理
+-- ══════════════════════════════════════════════
+
+UserInputService.JumpRequest:Connect(function()
+    if States.InfiniteJump then
+        local hum = GetHumanoid()
+        if hum then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end)
+
+-- ══════════════════════════════════════════════
+-- 角色重生处理
+-- ══════════════════════════════════════════════
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    Humanoid = char:WaitForChild("Humanoid")
+    HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
+end)
+
+-- ══════════════════════════════════════════════
+-- 聊天命令系统
+-- ══════════════════════════════════════════════
+
+local Commands = {
+    ["fly"] = function() LaunchFly() end,
+    ["speed"] = function(args)
+        if args[1] then
+            Config.Speed = tonumber(args[1]) or 50
+        end
+        ToggleSpeed(not States.Speeding)
+    end,
+    ["noclip"] = function() ToggleNoclip(not States.Noclip) end,
+    ["esp"] = function() ToggleESP(not States.ESP) end,
+    ["aimbot"] = function() ToggleAimbot(not States.Aimbot) end,
+    ["god"] = function() ToggleGodMode(not States.GodMode) end,
+    ["invis"] = function() ToggleInvisible(not States.Invisible) end,
+    ["fullbright"] = function() ToggleFullbright(not States.Fullbright) end,
+    ["tp"] = function(args)
+        if args[1] then
+            TeleportToPlayer(table.concat(args, " "))
+        else
+            Notify("错误", "用法: /tp [玩家名]", 3)
+        end
+    end,
+    ["jump"] = function(args)
+        local power = tonumber(args[1]) or 100
+        Config.JumpPower = power
+        ToggleSuperJump(true)
+    end,
+    ["help"] = function()
+        local helpText = "=== 命令列表 ===\n"
+            .. "/fly - 飞行(XY脚本)\n"
+            .. "/speed [值] - 加速\n"
+            .. "/noclip - 穿墙\n"
+            .. "/esp - ESP透视\n"
+            .. "/aimbot - 自瞄\n"
+            .. "/god - 无敌\n"
+            .. "/invis - 隐身\n"
+            .. "/fullbright - 全图亮\n"
+            .. "/tp [名字] - 传送\n"
+            .. "/jump [值] - 跳跃增强\n"
+        Notify("帮助", helpText, 10)
+    end,
+}
+
+-- 聊天命令监听
+LocalPlayer.Chatted:Connect(function(message)
+    if message:sub(1, 1) == "/" then
+        local parts = {}
+        for word in message:sub(2):gmatch("%S+") do
+            table.insert(parts, word)
+        end
+        
+        local cmd = parts[1]
+        local args = {}
+        for i = 2, #parts do
+            table.insert(args, parts[i])
+        end
+        
+        if Commands[cmd] then
+            Commands[cmd](args)
+        end
+    end
+end)
+
+-- ══════════════════════════════════════════════
+-- 启动
+-- ══════════════════════════════════════════════
+
+Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+Humanoid = Character:WaitForChild("Humanoid")
+HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+print("═══════════════════════════════════")
+print("  Ultimate Script Hub v4.0 (WindUI)")
+print("  已加载成功!")
+print("═══════════════════════════════════")
