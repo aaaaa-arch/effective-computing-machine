@@ -1,0 +1,26 @@
+-- 【常年不变的验证加载器】 别把这段代码发给任何人！
+local SECRET_KEY = "Zhi牛逼"  -- 你的密钥，自己改，别泄露
+local MAIN_CIPHER_URL = "https://raw.githubusercontent.com/aaaaa-arch/effective-computing-machine/main/main_cipher.lua"  -- 你加密后的主脚本链接
+
+-- 1. 拉取加密后的主脚本
+local success, cipher_text = pcall(function()
+    return game:HttpGet(MAIN_CIPHER_URL)
+end)
+
+if not success or cipher_text == "" then
+    warn("404：脚本不存在或拉取失败")
+    return
+end
+
+-- 2. 用密钥解密（没密钥的话这里直接炸，效果≈404）
+local decrypt_success, plain_text = pcall(function()
+    return crypt.aes_decrypt(cipher_text, SECRET_KEY)
+end)
+
+if not decrypt_success or plain_text == "" then
+    warn("404：密钥错误或脚本已失效")
+    return
+end
+
+-- 3. 执行解密后的主脚本
+loadstring(plain_text)()
