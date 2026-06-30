@@ -1,39 +1,104 @@
--- 原生卡密验证弹窗（无依赖，100%能跑）
+-- 🐱 喵验证脚本（两层界面版）
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-
 local player = Players.LocalPlayer
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "KeyVerificationGUI"
+screenGui.Name = "MeowVerifyGUI"
 screenGui.Parent = player:WaitForChild("PlayerGui")
 screenGui.ResetOnSpawn = false
 
--- 背景遮罩
-local backdrop = Instance.new("Frame")
-backdrop.Size = UDim2.new(1,0,1,0)
-backdrop.BackgroundColor3 = Color3.fromRGB(0,0,0)
-backdrop.BackgroundTransparency = 0.5
-backdrop.Parent = screenGui
+--------------------------
+-- 【第一层：版本选择界面】
+--------------------------
+local selectFrame = Instance.new("Frame")
+selectFrame.Size = UDim2.new(0,360,0,220)
+selectFrame.Position = UDim2.new(0.5,-180,0.5,-110)
+selectFrame.BackgroundColor3 = Color3.fromRGB(28,28,30)
+selectFrame.BorderSizePixel = 0
+selectFrame.Parent = screenGui
+Instance.new("UICorner",selectFrame).CornerRadius = UDim.new(0,10)
 
--- 弹窗主体
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0,320,0,180)
-frame.Position = UDim2.new(0.5,-160,0.5,-90)
-frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
-frame.BorderSizePixel = 0
-frame.Parent = backdrop
-Instance.new("UICorner",frame).CornerRadius = UDim.new(0,8)
+-- 选择界面标题
+local selectTitle = Instance.new("TextLabel")
+selectTitle.Text = "🐱 喵验证 · 版本选择"
+selectTitle.Font = Enum.Font.GothamBold
+selectTitle.TextSize = 20
+selectTitle.TextColor3 = Color3.fromRGB(255,255,255)
+selectTitle.Size = UDim2.new(1,0,0,50)
+selectTitle.BackgroundTransparency = 1
+selectTitle.Parent = selectFrame
 
--- 标题
-local title = Instance.new("TextLabel")
-title.Text = "🔒 脚本验证"
-title.Font = Enum.Font.GothamBold
-title.TextSize = 18
-title.TextColor3 = Color3.fromRGB(255,255,255)
-title.Size = UDim2.new(1,0,0,40)
-title.BackgroundTransparency = 1
-title.Parent = frame
+-- 分割线
+local line = Instance.new("Frame")
+line.Size = UDim2.new(0.85,0,0,1)
+line.Position = UDim2.new(0.075,0,0,55)
+line.BackgroundColor3 = Color3.fromRGB(60,60,65)
+line.BorderSizePixel = 0
+line.Parent = selectFrame
+
+-- 【新脚本按钮：标注暂未修复】
+local newBtn = Instance.new("TextButton")
+newBtn.Text = "🆕 新脚本（暂未修复）"
+newBtn.Font = Enum.Font.Gotham
+newBtn.TextSize = 16
+newBtn.TextColor3 = Color3.fromRGB(150,150,150) -- 置灰
+newBtn.Size = UDim2.new(0.85,0,0,45)
+newBtn.Position = UDim2.new(0.075,0,0,75)
+newBtn.BackgroundColor3 = Color3.fromRGB(45,45,50) -- 暗背景
+newBtn.Parent = selectFrame
+Instance.new("UICorner",newBtn).CornerRadius = UDim.new(0,6)
+
+-- 新脚本点击提示
+newBtn.MouseButton1Click:Connect(function()
+    local tip = Instance.new("TextLabel")
+    tip.Text = "⚠️ 该功能暂未修复，请选择下方旧脚本"
+    tip.Font = Enum.Font.Gotham
+    tip.TextSize = 13
+    tip.TextColor3 = Color3.fromRGB(255,80,80)
+    tip.Size = UDim2.new(0.85,0,0,25)
+    tip.Position = UDim2.new(0.075,0,0,125)
+    tip.BackgroundTransparency = 1
+    tip.Parent = selectFrame
+    -- 2秒后消失
+    task.delay(2, function() tip:Destroy() end)
+    -- 点的时候抖一下提示
+    local tween = TweenService:Create(newBtn, TweenInfo.new(0.08,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,0,true), {Position = UDim2.new(0.075,0,0,75+3)})
+    tween:Play()
+end)
+
+-- 【旧脚本按钮：标注选这里】
+local oldBtn = Instance.new("TextButton")
+oldBtn.Text = "✅ 旧脚本（选这里）"
+oldBtn.Font = Enum.Font.GothamBold
+oldBtn.TextSize = 16
+oldBtn.TextColor3 = Color3.fromRGB(255,255,255)
+oldBtn.Size = UDim2.new(0.85,0,0,45)
+oldBtn.Position = UDim2.new(0.075,0,0,135)
+oldBtn.BackgroundColor3 = Color3.fromRGB(0,130,230) -- 亮蓝色突出
+oldBtn.Parent = selectFrame
+Instance.new("UICorner",oldBtn).CornerRadius = UDim.new(0,6)
+
+--------------------------
+-- 【第二层：旧脚本卡密验证界面（默认隐藏）】
+--------------------------
+local verifyFrame = Instance.new("Frame")
+verifyFrame.Size = UDim2.new(0,320,0,180)
+verifyFrame.Position = UDim2.new(0.5,-160,0.5,-90)
+verifyFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+verifyFrame.BorderSizePixel = 0
+verifyFrame.Visible = false -- 默认隐藏，点了旧脚本才显示
+verifyFrame.Parent = screenGui
+Instance.new("UICorner",verifyFrame).CornerRadius = UDim.new(0,8)
+
+-- 验证界面标题
+local verifyTitle = Instance.new("TextLabel")
+verifyTitle.Text = "🔒 旧脚本验证"
+verifyTitle.Font = Enum.Font.GothamBold
+verifyTitle.TextSize = 18
+verifyTitle.TextColor3 = Color3.fromRGB(255,255,255)
+verifyTitle.Size = UDim2.new(1,0,0,40)
+verifyTitle.BackgroundTransparency = 1
+verifyTitle.Parent = verifyFrame
 
 -- 提示文字
 local hint = Instance.new("TextLabel")
@@ -44,7 +109,7 @@ hint.TextColor3 = Color3.fromRGB(200,200,200)
 hint.Size = UDim2.new(1,-20,0,20)
 hint.Position = UDim2.new(0,10,0,50)
 hint.BackgroundTransparency = 1
-hint.Parent = frame
+hint.Parent = verifyFrame
 
 -- 输入框
 local textBox = Instance.new("TextBox")
@@ -56,36 +121,43 @@ textBox.Size = UDim2.new(1,-40,0,35)
 textBox.Position = UDim2.new(0,20,0,80)
 textBox.BackgroundColor3 = Color3.fromRGB(45,45,45)
 textBox.ClearTextOnFocus = false
-textBox.Parent = frame
+textBox.Parent = verifyFrame
 Instance.new("UICorner",textBox).CornerRadius = UDim.new(0,6)
 
 -- 确认按钮
-local button = Instance.new("TextButton")
-button.Text = "确 认"
-button.Font = Enum.Font.GothamBold
-button.TextSize = 14
-button.TextColor3 = Color3.fromRGB(255,255,255)
-button.Size = UDim2.new(1,-40,0,35)
-button.Position = UDim2.new(0,20,0,130)
-button.BackgroundColor3 = Color3.fromRGB(0,120,215)
-button.Parent = frame
-Instance.new("UICorner",button).CornerRadius = UDim.new(0,6)
+local confirmBtn = Instance.new("TextButton")
+confirmBtn.Text = "确 认"
+confirmBtn.Font = Enum.Font.GothamBold
+confirmBtn.TextSize = 14
+confirmBtn.TextColor3 = Color3.fromRGB(255,255,255)
+confirmBtn.Size = UDim2.new(1,-40,0,35)
+confirmBtn.Position = UDim2.new(0,20,0,130)
+confirmBtn.BackgroundColor3 = Color3.fromRGB(0,120,215)
+confirmBtn.Parent = verifyFrame
+Instance.new("UICorner",confirmBtn).CornerRadius = UDim.new(0,6)
 
--- 验证逻辑
+-- 旧脚本按钮点击事件：隐藏选择界面，显示验证界面
+oldBtn.MouseButton1Click:Connect(function()
+    selectFrame.Visible = false
+    verifyFrame.Visible = true
+end)
+
+-- 卡密验证逻辑（和之前一致）
 local CORRECT_KEY = "Zhi牛逼" -- 你的卡密在这改
-local MAIN_SCRIPT_URL = "https://raw.githubusercontent.com/aaaaa-arch/effective-computing-machine/refs/heads/main/%E8%87%AA%E5%88%B6%E8%84%9A%E6%9C%AC"
+local MAIN_SCRIPT_URL = "https://raw.githubusercontent.com/aaaaa-arch/effective-computing-machine/main/main_cipher.lua"
 
-button.MouseButton1Click:Connect(function()
+confirmBtn.MouseButton1Click:Connect(function()
     if textBox.Text == CORRECT_KEY then
-        -- 验证成功，关弹窗加载主脚本
+        -- 验证成功，销毁所有UI加载主脚本
         screenGui:Destroy()
         local success, err = pcall(function()
             loadstring(game:HttpGet(MAIN_SCRIPT_URL))()
         end)
         if not success then
             warn("主脚本加载失败:", err)
+            -- 失败时弹个临时提示
             local failHint = Instance.new("TextLabel")
-            failHint.Text = "主脚本加载失败！"
+            failHint.Text = "❌ 主脚本加载失败！"
             failHint.TextColor3 = Color3.fromRGB(255,50,50)
             failHint.Size = UDim2.new(0,200,0,30)
             failHint.Position = UDim2.new(0.5,-100,0.5,-15)
@@ -95,19 +167,18 @@ button.MouseButton1Click:Connect(function()
             failHint:Destroy()
         end
     else
-        -- 卡密错误，抖一下输入框提示
+        -- 卡密错误提示
         textBox.Text = ""
-        local tween = TweenService:Create(frame, TweenInfo.new(0.1,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,0,true), {Position = UDim2.new(0.5,-160,0.5,-90 + 5)})
+        local tween = TweenService:Create(verifyFrame, TweenInfo.new(0.1,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,0,true), {Position = UDim2.new(0.5,-160,0.5,-90+5)})
         tween:Play()
-        button.Text = "卡密错误！"
-        task.wait(1)
-        button.Text = "确 认"
+        confirmBtn.Text = "卡密错误！"
+        task.delay(1, function() confirmBtn.Text = "确 认" end)
     end
 end)
 
--- 按回车也能提交
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.Return then
-        button.MouseButton1Click:Fire()
+-- 按回车提交卡密
+game:GetService("UserInputService").InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Return and verifyFrame.Visible then
+        confirmBtn.MouseButton1Click:Fire()
     end
 end)
