@@ -73,7 +73,7 @@ Instance.new("UICorner",button).CornerRadius = UDim.new(0,6)
 
 -- 验证逻辑
 local CORRECT_KEY = "Zhi牛逼" -- 你的卡密在这改
-local MAIN_SCRIPT_URL = "https://raw.githubusercontent.com/aaaaa-arch/effective-computing-machine/main/main_cipher.lua"
+local MAIN_SCRIPT_URL = "https://raw.githubusercontent.com/aaaaa-arch/effective-computing-machine/refs/heads/main/%E8%87%AA%E5%88%B6%E8%84%9A%E6%9C%AC"
 
 button.MouseButton1Click:Connect(function()
     if textBox.Text == CORRECT_KEY then
