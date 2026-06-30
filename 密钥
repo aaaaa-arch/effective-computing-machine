@@ -1,67 +1,113 @@
--- 卡密验证加载器 (WindUI版)
--- 加载 WindUI (请确保这个链接有效)
-local success, WindUI = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/Init.lua"))()
+-- 原生卡密验证弹窗（无依赖，100%能跑）
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "KeyVerificationGUI"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- 背景遮罩
+local backdrop = Instance.new("Frame")
+backdrop.Size = UDim2.new(1,0,1,0)
+backdrop.BackgroundColor3 = Color3.fromRGB(0,0,0)
+backdrop.BackgroundTransparency = 0.5
+backdrop.Parent = screenGui
+
+-- 弹窗主体
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0,320,0,180)
+frame.Position = UDim2.new(0.5,-160,0.5,-90)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+frame.BorderSizePixel = 0
+frame.Parent = backdrop
+Instance.new("UICorner",frame).CornerRadius = UDim.new(0,8)
+
+-- 标题
+local title = Instance.new("TextLabel")
+title.Text = "🔒 脚本验证"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.Size = UDim2.new(1,0,0,40)
+title.BackgroundTransparency = 1
+title.Parent = frame
+
+-- 提示文字
+local hint = Instance.new("TextLabel")
+hint.Text = "请输入卡密（联系作者获取）"
+hint.Font = Enum.Font.Gotham
+hint.TextSize = 14
+hint.TextColor3 = Color3.fromRGB(200,200,200)
+hint.Size = UDim2.new(1,-20,0,20)
+hint.Position = UDim2.new(0,10,0,50)
+hint.BackgroundTransparency = 1
+hint.Parent = frame
+
+-- 输入框
+local textBox = Instance.new("TextBox")
+textBox.PlaceholderText = "在此输入卡密..."
+textBox.Font = Enum.Font.Gotham
+textBox.TextSize = 14
+textBox.TextColor3 = Color3.fromRGB(255,255,255)
+textBox.Size = UDim2.new(1,-40,0,35)
+textBox.Position = UDim2.new(0,20,0,80)
+textBox.BackgroundColor3 = Color3.fromRGB(45,45,45)
+textBox.ClearTextOnFocus = false
+textBox.Parent = frame
+Instance.new("UICorner",textBox).CornerRadius = UDim.new(0,6)
+
+-- 确认按钮
+local button = Instance.new("TextButton")
+button.Text = "确 认"
+button.Font = Enum.Font.GothamBold
+button.TextSize = 14
+button.TextColor3 = Color3.fromRGB(255,255,255)
+button.Size = UDim2.new(1,-40,0,35)
+button.Position = UDim2.new(0,20,0,130)
+button.BackgroundColor3 = Color3.fromRGB(0,120,215)
+button.Parent = frame
+Instance.new("UICorner",button).CornerRadius = UDim.new(0,6)
+
+-- 验证逻辑
+local CORRECT_KEY = "Zhi牛逼" -- 你的卡密在这改
+local MAIN_SCRIPT_URL = "https://raw.githubusercontent.com/aaaaa-arch/effective-computing-machine/main/main_cipher.lua"
+
+button.MouseButton1Click:Connect(function()
+    if textBox.Text == CORRECT_KEY then
+        -- 验证成功，关弹窗加载主脚本
+        screenGui:Destroy()
+        local success, err = pcall(function()
+            loadstring(game:HttpGet(MAIN_SCRIPT_URL))()
+        end)
+        if not success then
+            warn("主脚本加载失败:", err)
+            local failHint = Instance.new("TextLabel")
+            failHint.Text = "主脚本加载失败！"
+            failHint.TextColor3 = Color3.fromRGB(255,50,50)
+            failHint.Size = UDim2.new(0,200,0,30)
+            failHint.Position = UDim2.new(0.5,-100,0.5,-15)
+            failHint.BackgroundTransparency = 1
+            failHint.Parent = player.PlayerGui
+            task.wait(2)
+            failHint:Destroy()
+        end
+    else
+        -- 卡密错误，抖一下输入框提示
+        textBox.Text = ""
+        local tween = TweenService:Create(frame, TweenInfo.new(0.1,Enum.EasingStyle.Linear,Enum.EasingDirection.InOut,0,true), {Position = UDim2.new(0.5,-160,0.5,-90 + 5)})
+        tween:Play()
+        button.Text = "卡密错误！"
+        task.wait(1)
+        button.Text = "确 认"
+    end
 end)
 
-if not success or not WindUI then
-    warn("WindUI 加载失败，请检查网络或WindUI链接")
-    return
-end
-
--- 创建窗口
-local Window = WindUI:CreateWindow({
-    Title = "Verity 脚本验证",
-    Icon = "rbxassetid://7734053498", -- 锁的图标
-    Size = UDim2.fromOffset(300, 180),
-    Transparent = true,
-    Theme = "Dark",
-})
-
--- 创建 Tab
-local Tab = Window:Tab({ Title = "验证", Icon = "rbxassetid://7733724749" })
-
--- 创建输入框和按钮
-Tab:Paragraph({ Title = "请输入卡密", Content = "请联系作者获取激活码" })
-
-local KeyInput = Tab:TextBox({
-    Title = "卡密",
-    Value = "",
-    PlaceholderText = "在此输入...",
-    Callback = function() end -- 输入时不处理，等点击按钮
-})
-
-Tab:Button({
-    Title = "确认",
-    Callback = function()
-        local user_key = KeyInput.Text -- 获取用户输入的内容
-        local correct_key = "Zhi牛逼"  -- <-- 你的正确卡密在这里！
-        
-        if user_key == correct_key then
-            Window:Remove() -- 验证成功，关闭窗口
-            WindUI:Notify({ Title = "验证成功", Content = "正在加载主脚本...", Duration = 2 })
-            
-            -- 验证成功后，加载主脚本
-            local main_url = "https://raw.githubusercontent.com/aaaaa-arch/effective-computing-machine/main/main_cipher.lua"
-            local ok, cipher = pcall(game.HttpGet, game, main_url)
-            if ok and cipher then
-                -- 如果你的主脚本是加密的，这里需要解密；如果是明文，直接 loadstring
-                -- local plain = crypt.aes_decrypt(cipher, correct_key)
-                -- loadstring(plain)()
-                loadstring(cipher)() -- 假设主脚本是明文，或者你自行加上解密逻辑
-            else
-                WindUI:Notify({ Title = "错误", Content = "主脚本加载失败", Icon = "rbxassetid://7733914745" })
-            end
-        else
-            WindUI:Notify({ 
-                Title = "验证失败", 
-                Content = "卡密不正确！", 
-                Icon = "rbxassetid://7733914745", -- 错误图标
-                Duration = 3 
-            })
-            KeyInput:SetText("") -- 清空输入框
-        end
+-- 按回车也能提交
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Return then
+        button.MouseButton1Click:Fire()
     end
-})
-
-Window:SelectTab(1)
+end)
